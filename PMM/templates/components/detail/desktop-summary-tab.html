@@ -1,0 +1,147 @@
+<!-- Desktop Summary Tab. Rebuilt as a flex column shell so the
+     editing mode keeps its textarea at a FIXED full-height surface
+     with the textarea's own scrollbar handling overflow — the
+     previous layout had an outer overflow-y-auto whose content
+     stretched with the textarea's scrollHeight, pushing the
+     editing-hint and the tab-bar save buttons offscreen for long
+     summaries. The reading view still scrolls inside the same flex
+     surface via .tab-rail-scroll.
+     Per-tab action buttons (Edit / Save) live in the right-rail
+     tab-bar action toolbar — that's why there's no save bar here. -->
+<div v-if="selectedTab === 'summary'" class="h-full flex flex-col overflow-hidden">
+
+    <!-- In progress -->
+    <div v-if="selectedRecording.status === 'SUMMARIZING'" class="flex-1 overflow-y-auto px-4 py-4">
+        <div class="empty">
+            <div class="spinner spinner--lg"></div>
+            <div class="empty__title" v-text="t('summary.summaryInProgress')"></div>
+        </div>
+    </div>
+
+    <!-- Empty state -->
+    <div v-else-if="!selectedRecording.summary" class="flex-1 overflow-y-auto px-4 py-4">
+        <div class="empty">
+            <div class="empty__icon"><i class="fas fa-file-alt"></i></div>
+            <div class="empty__title" v-text="t('summary.noSummary')"></div>
+            <div v-if="processedTranscription.isError" class="banner banner--warn" style="margin-top: var(--sp-2);">
+                <i class="fas fa-exclamation-triangle"></i>
+                <span>Cannot generate summary: transcription failed</span>
+            </div>
+            <div class="flex items-center gap-2" style="margin-top: var(--sp-3);">
+                <button class="btn btn--primary"
+                        @click="generateSummary()"
+                        :disabled="processedTranscription.isError">
+                    <i class="fas fa-magic"></i>
+                    <span>${ t('summary.generateSummary') }</span>
+                </button>
+                <button v-if="!processedTranscription.isError"
+                        class="btn btn--ghost btn--icon"
+                        @click="openCustomizeSummaryModal"
+                        :title="t('summary.customizePrompt') || 'Customise prompt'">
+                    <i class="fas fa-sliders-h"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reading mode — single flex-1 scroll surface, content padding
+         is inside so the scrollbar runs the full edge. -->
+    <div v-else-if="!editingSummary"
+         class="flex-1 overflow-y-auto px-4 py-4">
+        <div v-if="structuredSummary.isStructured" class="meeting-summary">
+            <div class="meeting-summary__header">
+                <div class="meeting-summary__icon"><i class="fas fa-file-alt"></i></div>
+                <div>
+                    <h2>Meeting Summary</h2>
+                    <p v-if="selectedRecording.title">${ selectedRecording.title }</p>
+                </div>
+            </div>
+
+            <section v-if="selectedRecording.meeting_date || selectedRecording.audio_duration || selectedRecording.participants"
+                     class="meeting-summary__card meeting-summary__meta">
+                <h3><i class="fas fa-circle-info"></i><span>Meeting Information</span></h3>
+                <div class="meeting-summary__facts">
+                    <div v-if="selectedRecording.meeting_date" class="meeting-summary__fact">
+                        <span>Date</span>
+                        <strong>${ formatDisplayDate(selectedRecording.meeting_date, true) }</strong>
+                    </div>
+                    <div v-if="selectedRecording.audio_duration" class="meeting-summary__fact">
+                        <span>Duration</span>
+                        <strong>${ formatAudioTime(selectedRecording.audio_duration) }</strong>
+                    </div>
+                    <div v-if="selectedRecording.participants" class="meeting-summary__fact">
+                        <span>Participants</span>
+                        <strong>${ selectedRecording.participants }</strong>
+                    </div>
+                </div>
+            </section>
+
+            <section v-if="structuredSummary.overview" class="meeting-summary__card">
+                <h3><i class="fas fa-align-left"></i><span>Summary</span></h3>
+                <p class="meeting-summary__paragraph">${ structuredSummary.overview }</p>
+            </section>
+
+            <section v-if="structuredSummary.keyPoints.length" class="meeting-summary__card">
+                <h3><i class="fas fa-comments"></i><span>Key Discussion Points</span></h3>
+                <ul class="meeting-summary__list">
+                    <li v-for="(point, index) in structuredSummary.keyPoints" :key="`key-point-${index}`">${ point }</li>
+                </ul>
+            </section>
+
+            <section v-if="structuredSummary.actionItems.length" class="meeting-summary__card">
+                <h3><i class="fas fa-list-check"></i><span>Action Items</span></h3>
+                <ul class="meeting-summary__checklist">
+                    <li v-for="(item, index) in structuredSummary.actionItems" :key="`action-item-${index}`">
+                        <span class="meeting-summary__checkbox"></span>
+                        <span>${ item }</span>
+                    </li>
+                </ul>
+            </section>
+
+            <section v-if="structuredSummary.decisions.length" class="meeting-summary__card">
+                <h3><i class="fas fa-check-circle"></i><span>Decisions</span></h3>
+                <ul class="meeting-summary__list">
+                    <li v-for="(decision, index) in structuredSummary.decisions" :key="`decision-${index}`">${ decision }</li>
+                </ul>
+            </section>
+
+            <section v-if="structuredSummary.nextSteps.length" class="meeting-summary__card">
+                <h3><i class="fas fa-arrow-right"></i><span>Next Steps</span></h3>
+                <ul class="meeting-summary__list">
+                    <li v-for="(step, index) in structuredSummary.nextSteps" :key="`next-step-${index}`">${ step }</li>
+                </ul>
+            </section>
+
+            <section v-if="structuredSummary.risks.length" class="meeting-summary__card">
+                <h3><i class="fas fa-triangle-exclamation"></i><span>Risks</span></h3>
+                <ul class="meeting-summary__list">
+                    <li v-for="(risk, index) in structuredSummary.risks" :key="`risk-${index}`">${ risk }</li>
+                </ul>
+            </section>
+        </div>
+        <div v-else-if="selectedRecording.summary_html" class="prose-flush" v-html="selectedRecording.summary_html"></div>
+        <div v-else class="empty">
+            <div class="empty__icon"><i class="fas fa-file-alt"></i></div>
+            <div class="empty__title">Summary is available but could not be rendered.</div>
+        </div>
+    </div>
+
+    <!-- Editing mode — EasyMDE is mounted onto the textarea below.
+         The .markdown-editor-container wrapper is what hooks all the
+         existing theme + height CSS (.markdown-editor-container
+         .EasyMDEContainer { ... } in styles.css) — without it the
+         editor falls back to its un-themed default appearance with
+         auto-grow height that extends past the viewport. -->
+    <div v-else class="flex-1 flex flex-col overflow-hidden px-4 py-4">
+        <div class="markdown-editor-container flex-1 min-h-0 flex flex-col">
+            <textarea ref="summaryMarkdownEditor"
+                      v-model="selectedRecording.summary"
+                      :placeholder="t('form.enterSummaryMarkdown')">
+            </textarea>
+        </div>
+        <div class="t-meta" style="margin-top: var(--sp-2); flex-shrink: 0;">
+            <i class="fas fa-circle" style="font-size: 6px; color: var(--text-accent); margin-right: var(--sp-1);"></i>
+            <span>${ t('summary.editingSaveHint') }</span>
+        </div>
+    </div>
+</div>

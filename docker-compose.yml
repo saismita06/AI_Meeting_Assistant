@@ -1,0 +1,54 @@
+services:
+  pmm:
+    build:
+      context: ./PMM
+
+    container_name: pmm
+
+    ports:
+      - "8899:8899"
+
+    env_file:
+      - ./PMM/.env
+
+    environment:
+      TRANSCRIPTION_BASE_URL: http://whisper-asr:9000/v1
+      TEXT_MODEL_BASE_URL: http://ollama:11434/v1
+      AUDIO_COMPRESS_UPLOADS: "false"
+
+    command: gunicorn --workers 1 --bind 0.0.0.0:8899 --timeout 600 src.app:app
+
+    depends_on:
+      - whisper-asr
+      - ollama
+
+  whisper-asr:
+    image: learnedmachine/whisperx-asr-service:latest
+    container_name: whisper-asr
+
+    environment:
+      HF_TOKEN: ${HF_TOKEN}
+      WHISPER_MODEL: tiny
+      MODEL: tiny
+
+    volumes:
+      - whisper-cache:/root/.cache
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+
+    volumes:
+      - ollama-data:/root/.ollama
+
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        ollama serve &
+        sleep 5
+        ollama pull qwen3:8b
+        wait
+
+volumes:
+  whisper-cache:
+  ollama-data:

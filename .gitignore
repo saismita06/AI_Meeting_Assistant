@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.pyc
+
+# Virtual environments
+.venv/
+venv/
+pyannote-env/
+
+# Environment files
+.env
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+
+# Docker
+*.tar

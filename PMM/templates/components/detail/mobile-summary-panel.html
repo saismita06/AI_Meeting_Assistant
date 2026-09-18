@@ -1,0 +1,140 @@
+<!-- Mobile Summary Panel.
+
+     Two modes:
+     (1) READING: small action toolbar (copy / download / edit) above
+         the prose. Toolbar hides when editing so the "edit pen
+         highlights when active" inconsistency from before is gone —
+         in edit mode there's no panel toolbar at all, only the
+         editor's own toolbar + a sticky Cancel/Save footer.
+     (2) EDITING: editor fills the panel edge-to-edge with minimal
+         outer padding so the typing area is as large as possible;
+         Cancel and Save live in a sticky footer below the editor. -->
+<!-- Per-tab contextual toolbar moved into mobile-header.html so it
+     shares the chevron row instead of taking a separate row here. -->
+<div v-if="mobileTab === 'summary'" class="h-full flex flex-col">
+
+    <!-- Editing-mode shell — editor goes edge-to-edge (no horizontal
+         padding) since the surrounding mobile content area no longer
+         wraps it in p-4. Tiny pt-1 keeps the editor toolbar from
+         touching the header's bottom border. -->
+    <div v-if="editingSummary" class="flex-grow flex flex-col min-h-0 pt-1">
+        <div class="markdown-editor-container flex-1 min-h-0 flex flex-col">
+            <textarea ref="summaryMarkdownEditor"
+                      v-model="selectedRecording.summary"></textarea>
+        </div>
+        <div class="flex justify-end gap-2 flex-shrink-0 px-3 py-2 border-t"
+             style="border-top-color: var(--border-secondary);">
+            <button @click="cancelEditSummary" class="btn btn--sm btn--ghost" v-text="t('common.cancel')"></button>
+            <button @click="saveEditSummary" class="btn btn--sm btn--primary" v-text="t('common.save')"></button>
+        </div>
+    </div>
+
+    <!-- Reading-mode body — px-3 only for prose readability against
+         the screen edge; py-3 keeps the prose off the toolbar above. -->
+    <div v-else class="flex-grow overflow-y-auto px-3 py-3">
+        <div>
+            <div v-if="selectedRecording.status === 'SUMMARIZING'" class="empty">
+                <div class="spinner spinner--lg"></div>
+                <div class="empty__title" v-text="t('help.generatingSummary')"></div>
+            </div>
+            <div v-else-if="!selectedRecording.summary" class="empty">
+                <div class="empty__icon"><i class="fas fa-file-alt"></i></div>
+                <div class="empty__title" v-text="t('summary.noSummary')"></div>
+                <div v-if="processedTranscription.isError" class="banner banner--warn">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span>Cannot generate summary: transcription failed</span>
+                </div>
+                <div class="flex items-center gap-2" style="margin-top: var(--sp-3);">
+                    <button class="btn btn--primary"
+                            @click="generateSummary()"
+                            :disabled="processedTranscription.isError">
+                        <i class="fas fa-magic"></i>
+                        <span>Generate Summary</span>
+                    </button>
+                    <button v-if="!processedTranscription.isError"
+                            class="btn btn--ghost btn--icon"
+                            @click="openCustomizeSummaryModal"
+                            title="Customise prompt">
+                        <i class="fas fa-sliders-h"></i>
+                    </button>
+                </div>
+            </div>
+            <div v-else-if="structuredSummary.isStructured" class="meeting-summary meeting-summary--mobile">
+                <div class="meeting-summary__header">
+                    <div class="meeting-summary__icon"><i class="fas fa-file-alt"></i></div>
+                    <div>
+                        <h2>Meeting Summary</h2>
+                        <p v-if="selectedRecording.title">${ selectedRecording.title }</p>
+                    </div>
+                </div>
+
+                <section v-if="selectedRecording.meeting_date || selectedRecording.audio_duration || selectedRecording.participants"
+                         class="meeting-summary__card meeting-summary__meta">
+                    <h3><i class="fas fa-circle-info"></i><span>Meeting Information</span></h3>
+                    <div class="meeting-summary__facts">
+                        <div v-if="selectedRecording.meeting_date" class="meeting-summary__fact">
+                            <span>Date</span>
+                            <strong>${ formatDisplayDate(selectedRecording.meeting_date, true) }</strong>
+                        </div>
+                        <div v-if="selectedRecording.audio_duration" class="meeting-summary__fact">
+                            <span>Duration</span>
+                            <strong>${ formatAudioTime(selectedRecording.audio_duration) }</strong>
+                        </div>
+                        <div v-if="selectedRecording.participants" class="meeting-summary__fact">
+                            <span>Participants</span>
+                            <strong>${ selectedRecording.participants }</strong>
+                        </div>
+                    </div>
+                </section>
+
+                <section v-if="structuredSummary.overview" class="meeting-summary__card">
+                    <h3><i class="fas fa-align-left"></i><span>Summary</span></h3>
+                    <p class="meeting-summary__paragraph">${ structuredSummary.overview }</p>
+                </section>
+
+                <section v-if="structuredSummary.keyPoints.length" class="meeting-summary__card">
+                    <h3><i class="fas fa-comments"></i><span>Key Discussion Points</span></h3>
+                    <ul class="meeting-summary__list">
+                        <li v-for="(point, index) in structuredSummary.keyPoints" :key="`mobile-key-point-${index}`">${ point }</li>
+                    </ul>
+                </section>
+
+                <section v-if="structuredSummary.actionItems.length" class="meeting-summary__card">
+                    <h3><i class="fas fa-list-check"></i><span>Action Items</span></h3>
+                    <ul class="meeting-summary__checklist">
+                        <li v-for="(item, index) in structuredSummary.actionItems" :key="`mobile-action-item-${index}`">
+                            <span class="meeting-summary__checkbox"></span>
+                            <span>${ item }</span>
+                        </li>
+                    </ul>
+                </section>
+
+                <section v-if="structuredSummary.decisions.length" class="meeting-summary__card">
+                    <h3><i class="fas fa-check-circle"></i><span>Decisions</span></h3>
+                    <ul class="meeting-summary__list">
+                        <li v-for="(decision, index) in structuredSummary.decisions" :key="`mobile-decision-${index}`">${ decision }</li>
+                    </ul>
+                </section>
+
+                <section v-if="structuredSummary.nextSteps.length" class="meeting-summary__card">
+                    <h3><i class="fas fa-arrow-right"></i><span>Next Steps</span></h3>
+                    <ul class="meeting-summary__list">
+                        <li v-for="(step, index) in structuredSummary.nextSteps" :key="`mobile-next-step-${index}`">${ step }</li>
+                    </ul>
+                </section>
+
+                <section v-if="structuredSummary.risks.length" class="meeting-summary__card">
+                    <h3><i class="fas fa-triangle-exclamation"></i><span>Risks</span></h3>
+                    <ul class="meeting-summary__list">
+                        <li v-for="(risk, index) in structuredSummary.risks" :key="`mobile-risk-${index}`">${ risk }</li>
+                    </ul>
+                </section>
+            </div>
+            <div v-else-if="selectedRecording.summary_html" class="prose-flush h-full" v-html="selectedRecording.summary_html"></div>
+            <div v-else class="empty">
+                <div class="empty__icon"><i class="fas fa-file-alt"></i></div>
+                <div class="empty__title">Summary is available but could not be rendered.</div>
+            </div>
+        </div>
+    </div>
+</div>

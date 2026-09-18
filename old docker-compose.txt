@@ -1,0 +1,41 @@
+services:
+  pmm:
+    build:
+      context: ./PMM
+
+    container_name: pmm
+
+    ports:
+      - "8899:8899"
+
+    env_file:
+      - ./PMM/.env
+
+    environment:
+      TRANSCRIPTION_BASE_URL: http://whisper-asr:9000/v1
+      TEXT_MODEL_BASE_URL: http://ollama:11434/v1
+
+    depends_on:
+      - whisper-asr
+      - ollama
+
+  whisper-asr:
+    image: learnedmachine/whisperx-asr-service:latest
+    container_name: whisper-asr
+
+    environment:
+      HF_TOKEN: ${HF_TOKEN}
+
+    volumes:
+      - whisper-cache:/root/.cache
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+
+    volumes:
+      - ollama-data:/root/.ollama
+
+volumes:
+  whisper-cache:
+  ollama-data:
